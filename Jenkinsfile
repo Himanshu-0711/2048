@@ -22,7 +22,7 @@ pipeline {
         }
         stage('Checkout from Git') {
             steps {
-                git branch: 'dev', url: 'https://github.com/Himanshu-0711/2048.git'
+                git branch: 'main', url: 'https://github.com/Himanshu-0711/2048.git'
             }
         }
         stage("Sonarqube Analysis") {
