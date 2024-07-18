@@ -9,9 +9,9 @@ pipeline {
         AWS_REGION = 'us-east-1'
         ECR_REPO_NAME = '2048-dev'
         ECR_REPO_URI = '909325007152.dkr.ecr.us-east-1.amazonaws.com/2048-dev'
-        CLUSTER_NAME = 'Jenkins-2048-dev-main-cluster' 
-        SERVICE_NAME = 'Jenkins-2048-dev-main-node-service' 
-        TASK_DEFINITION_NAME = '2048-td' 
+        CLUSTER_NAME = 'jenkins' 
+        SERVICE_NAME = 'nginx-service' 
+        TASK_DEFINITION_NAME = 'td' 
         CONTAINER_NAME = '2048-dev' 
     }
     stages {
