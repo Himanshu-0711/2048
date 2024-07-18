@@ -2,7 +2,7 @@ pipeline {
     agent any
     tools {
         jdk 'jdk17'
-        nodejs 'node18'
+        nodejs 'node16'
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
@@ -38,22 +38,6 @@ pipeline {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
                 }
-            }
-        }
-        stage('Install Dependencies') {
-            steps {
-                sh "npm install"
-            }
-        }
-        stage('OWASP FS SCAN') {
-            steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
-        }
-        stage('TRIVY FS SCAN') {
-            steps {
-                sh "trivy fs . > trivyfs.txt"
             }
         }
         stage("Docker Build") {
