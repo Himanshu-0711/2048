@@ -47,7 +47,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 // Use Node.js installation defined in Jenkins configuration
-                withEnv(["PATH+NODEJS=${tool 'NodeJS'}"]) {
+                withEnv(["PATH+NODEJS=${tool 'node16'}"]) {
                     sh "npm install"
                 }
             }
