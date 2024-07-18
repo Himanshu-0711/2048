@@ -2,7 +2,7 @@ pipeline {
     agent any
     tools {
         jdk 'jdk17'
-        nodejs 'node18'
+        nodejs 'node16'
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
@@ -38,6 +38,11 @@ pipeline {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
                 }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                sh "npm install"
             }
         }
         stage('OWASP FS SCAN') {
