@@ -40,11 +40,6 @@ pipeline {
                 }
             }
         }
-        stage('Install Dependencies') {
-            steps {
-                sh "npm install --silent --no-progress"
-            }
-        }
         stage('OWASP FS SCAN') {
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
