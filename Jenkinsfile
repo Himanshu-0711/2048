@@ -42,7 +42,7 @@ pipeline {
         }
         stage('Install Dependencies') {
             steps {
-                sh "npm install"
+                sh "npm install --silent --no-progress"
             }
         }
         stage('OWASP FS SCAN') {
