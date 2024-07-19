@@ -83,26 +83,18 @@ pipeline {
             steps {
                 script {
                     // Describe the existing task definition
-                    def taskDefinitionJson = sh(script: "aws ecs describe-task-definition --task-definition ${TASK_DEFINITION_NAME} --region ${AWS_REGION}", returnStdout: true).trim()
-                    
-                    // Parse the JSON to modify the image
-                    def jsonSlurper = new JsonSlurper()
-                    def taskDefinition = jsonSlurper.parseText(taskDefinitionJson)
-                    def containerDefinitions = taskDefinition.taskDefinition.containerDefinitions
+                    def taskDefinition = readJSON file: "task-definition.json"
                     
                     // Update the container image
-                    containerDefinitions.each { containerDef ->
+                    taskDefinition.containerDefinitions.each { containerDef ->
                         if (containerDef.name == "${CONTAINER_NAME}") {
                             containerDef.image = "${ECR_REPO_URI}:latest"
                         }
                     }
                     
                     // Register a new task definition revision
-                    def newTaskDefinition = taskDefinition.clone()
-                    newTaskDefinition.containerDefinitions = containerDefinitions
-                    
-                    def newTaskDefinitionJson = jsonSlurper.toJson(newTaskDefinition)
-                    def registerTaskDefCommand = "aws ecs register-task-definition --cli-input-json '${newTaskDefinitionJson}' --region ${AWS_REGION}"
+                    def updatedTaskDefinitionJson = writeJSON(taskDefinition)
+                    def registerTaskDefCommand = "aws ecs register-task-definition --cli-input-json '${updatedTaskDefinitionJson}' --region ${AWS_REGION}"
                     sh script: registerTaskDefCommand
                     
                     // Update the ECS service to use the new task definition revision
