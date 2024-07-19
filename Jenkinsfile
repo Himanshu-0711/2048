@@ -46,15 +46,54 @@ pipeline {
         stage('Register Task Definition Revision') {
             steps {
                 script {
-                    // Describe the existing task definition
-                    def describeTaskDefCmd = "aws ecs describe-task-definition --task-definition ${TASK_DEFINITION_NAME} --region ${AWS_REGION}"
-                    def taskDefinitionJson = sh(script: describeTaskDefCmd, returnStdout: true).trim()
-
-                    // Modify the task definition JSON to update the container image
-                    def updatedTaskDefinition = taskDefinitionJson.replaceAll(/"image":\s*"[^"]+"/, "\"image\": \"${ECR_REPO_URI}:latest\"")
-
+                    def taskDefinitionJson = """
+                    {
+                        "family": "${TASK_DEFINITION_NAME}",
+                        "executionRoleArn": "arn:aws:iam::909325007152:role/ecsTaskExecutionRole",
+                        "networkMode": "awsvpc",
+                        "containerDefinitions": [
+                            {
+                                "name": "${CONTAINER_NAME}",
+                                "image": "${ECR_REPO_URI}:latest",
+                                "cpu": 0,
+                                "portMappings": [
+                                    {
+                                        "containerPort": 3000,
+                                        "hostPort": 3000,
+                                        "protocol": "tcp",
+                                        "name": "node",
+                                        "appProtocol": "http"
+                                    }
+                                ],
+                                "essential": true,
+                                "environment": [],
+                                "environmentFiles": [],
+                                "mountPoints": [],
+                                "volumesFrom": [],
+                                "ulimits": [],
+                                "logConfiguration": {
+                                    "logDriver": "awslogs",
+                                    "options": {
+                                        "awslogs-group": "/ecs/${TASK_DEFINITION_NAME}",
+                                        "awslogs-create-group": "true",
+                                        "awslogs-region": "${AWS_REGION}",
+                                        "awslogs-stream-prefix": "ecs"
+                                    },
+                                    "secretOptions": []
+                                },
+                                "systemControls": []
+                            }
+                        ],
+                        "requiresCompatibilities": [
+                            "FARGATE"
+                        ],
+                        "cpu": "2048",
+                        "memory": "5120"
+                    }
+                    """
+                    
                     // Register a new task definition revision
-                    def registerTaskDefCmd = "aws ecs register-task-definition --cli-input-json '${updatedTaskDefinition}' --region ${AWS_REGION}"
+                    def registerTaskDefCmd = "aws ecs register-task-definition --cli-input-json '${taskDefinitionJson}' --region ${AWS_REGION}"
                     sh script: registerTaskDefCmd
                 }
             }
@@ -64,7 +103,7 @@ pipeline {
             steps {
                 script {
                     // Get the new task definition ARN
-                    def newTaskDefinitionArn = sh(script: describeTaskDefCmd + " | jq -r '.taskDefinition.taskDefinitionArn'", returnStdout: true).trim()
+                    def newTaskDefinitionArn = sh(script: "aws ecs describe-task-definition --task-definition ${TASK_DEFINITION_NAME} --region ${AWS_REGION} | jq -r '.taskDefinition.taskDefinitionArn'", returnStdout: true).trim()
 
                     // Update the ECS service to use the new task definition revision
                     sh """
