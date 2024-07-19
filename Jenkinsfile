@@ -1,42 +1,41 @@
 pipeline {
     agent any
     
+    tools {
+        jdk 'jdk17'
+        nodejs 'node18'
+    }
+    
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         AWS_REGION = 'us-east-1'
         ECR_REPO_NAME = '2048-dev'
         ECR_REPO_URI = '909325007152.dkr.ecr.us-east-1.amazonaws.com/2048-dev'
-        CLUSTER_NAME = 'jenkins' 
-        SERVICE_NAME = 'nginx-service' 
-        TASK_DEFINITION_NAME = 'td' 
-        CONTAINER_NAME = '2048-dev' 
-    }
-    
-    options {
-        timeout(time: 1, unit: 'HOURS') // Example: Set a timeout for the entire pipeline
+        CLUSTER_NAME = 'jenkins'
+        SERVICE_NAME = 'nginx-service'
+        TASK_DEFINITION_NAME = 'td'
+        CONTAINER_NAME = '2048-dev'
     }
     
     stages {
         stage('Clean Workspace') {
             steps {
-                cleanWs() // Clean workspace before starting
+                cleanWs()
             }
         }
         
         stage('Checkout from Git') {
             steps {
-                git branch: 'dev', url: 'https://github.com/Himanshu-0711/2048.git' // Checkout code from Git
+                git branch: 'dev', url: 'https://github.com/Himanshu-0711/2048.git'
             }
         }
         
-        stage("SonarQube Analysis") {
+        stage("Sonarqube Analysis") {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh """$SCANNER_HOME/bin/sonar-scanner \
+                    sh '''$SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectName=Game \
-                        -Dsonar.projectKey=Game \
-                        -Dsonar.sources=. \
-                        -Dsonar.java.binaries=target/classes"""
+                        -Dsonar.projectKey=Game'''
                 }
             }
         }
@@ -44,7 +43,6 @@ pipeline {
         stage("Quality Gate") {
             steps {
                 script {
-                    // Wait for the SonarQube analysis to complete and evaluate the Quality Gate
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
             }
@@ -54,7 +52,7 @@ pipeline {
             steps {
                 script {
                     // Build the Docker image
-                    sh "docker build -t ${ECR_REPO_NAME}:latest ."
+                    sh "docker build -t ${ECR_REPO_NAME} ."
                 }
             }
         }
@@ -71,10 +69,10 @@ pipeline {
         stage("Docker Push to ECR") {
             steps {
                 script {
-                    // Log in to Amazon ECR
+                    // Log in to ECR
                     sh 'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI'
                     
-                    // Tag and push the Docker image to Amazon ECR
+                    // Tag and push the Docker image to ECR
                     sh "docker tag ${ECR_REPO_NAME}:latest ${ECR_REPO_URI}:latest"
                     sh "docker push ${ECR_REPO_URI}:latest"
                 }
@@ -85,10 +83,11 @@ pipeline {
             steps {
                 script {
                     // Describe the existing task definition
-                    def taskDefinitionJson = sh(script: "aws ecs describe-task-definition --task-definition ${TASK_DEFINITION_NAME} --region ${AWS_REGION}", returnStdout: true)
+                    def taskDefinitionJson = sh(script: "aws ecs describe-task-definition --task-definition ${TASK_DEFINITION_NAME} --region ${AWS_REGION}", returnStdout: true).trim()
                     
                     // Parse the JSON to modify the image
-                    def taskDefinition = readJSON text: taskDefinitionJson
+                    def jsonSlurper = new JsonSlurper()
+                    def taskDefinition = jsonSlurper.parseText(taskDefinitionJson)
                     def containerDefinitions = taskDefinition.taskDefinition.containerDefinitions
                     
                     // Update the container image
@@ -99,10 +98,10 @@ pipeline {
                     }
                     
                     // Register a new task definition revision
-                    def newTaskDefinition = taskDefinition.taskDefinition.clone()
+                    def newTaskDefinition = taskDefinition.clone()
                     newTaskDefinition.containerDefinitions = containerDefinitions
                     
-                    def newTaskDefinitionJson = writeJSON returnText: true, json: newTaskDefinition
+                    def newTaskDefinitionJson = jsonSlurper.toJson(newTaskDefinition)
                     def registerTaskDefCommand = "aws ecs register-task-definition --cli-input-json '${newTaskDefinitionJson}' --region ${AWS_REGION}"
                     sh script: registerTaskDefCommand
                     
@@ -115,13 +114,4 @@ pipeline {
             }
         }
     }
-    
-    post {
-        always {
-            // Clean up Docker images after the pipeline completes
-            sh "docker rmi ${ECR_REPO_NAME}:latest"
-            sh "docker rmi ${ECR_REPO_URI}:latest"
-        }
-    }
 }
-
