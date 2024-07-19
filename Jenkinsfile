@@ -1,9 +1,6 @@
 pipeline {
     agent any
-    tools {
-        jdk 'jdk17'
-        nodejs 'node18'
-    }
+    
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         AWS_REGION = 'us-east-1'
@@ -14,40 +11,54 @@ pipeline {
         TASK_DEFINITION_NAME = 'td' 
         CONTAINER_NAME = '2048-dev' 
     }
+    
+    options {
+        timeout(time: 1, unit: 'HOURS') // Example: Set a timeout for the entire pipeline
+    }
+    
     stages {
         stage('Clean Workspace') {
             steps {
-                cleanWs()
+                cleanWs() // Clean workspace before starting
             }
         }
+        
         stage('Checkout from Git') {
             steps {
-                git branch: 'dev', url: 'https://github.com/Himanshu-0711/2048.git'
+                git branch: 'dev', url: 'https://github.com/Himanshu-0711/2048.git' // Checkout code from Git
             }
         }
-        stage("Sonarqube Analysis") {
+        
+        stage("SonarQube Analysis") {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Game \
-                    -Dsonar.projectKey=Game '''
+                    sh """$SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Game \
+                        -Dsonar.projectKey=Game \
+                        -Dsonar.sources=. \
+                        -Dsonar.java.binaries=target/classes"""
                 }
             }
         }
+        
         stage("Quality Gate") {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    // Wait for the SonarQube analysis to complete and evaluate the Quality Gate
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
             }
         }
+        
         stage("Docker Build") {
             steps {
                 script {
                     // Build the Docker image
-                    sh "docker build -t ${ECR_REPO_NAME} ."
+                    sh "docker build -t ${ECR_REPO_NAME}:latest ."
                 }
             }
         }
+        
         stage("TRIVY Image Scan") {
             steps {
                 script {
@@ -56,18 +67,20 @@ pipeline {
                 }
             }
         }
+        
         stage("Docker Push to ECR") {
             steps {
                 script {
-                    // Log in to ECR
+                    // Log in to Amazon ECR
                     sh 'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI'
                     
-                    // Tag and push the Docker image to ECR
-                    sh "docker tag ${ECR_REPO_NAME}:latest ${ECR_REPO_URI}:${ECR_REPO_NAME}:latest"
-                    sh "docker push ${ECR_REPO_URI}:${ECR_REPO_NAME}:latest"
+                    // Tag and push the Docker image to Amazon ECR
+                    sh "docker tag ${ECR_REPO_NAME}:latest ${ECR_REPO_URI}:latest"
+                    sh "docker push ${ECR_REPO_URI}:latest"
                 }
             }
         }
+        
         stage('Register Task Definition Revision and Deploy to ECS') {
             steps {
                 script {
@@ -81,7 +94,7 @@ pipeline {
                     // Update the container image
                     containerDefinitions.each { containerDef ->
                         if (containerDef.name == "${CONTAINER_NAME}") {
-                            containerDef.image = "${ECR_REPO_URI}:${ECR_REPO_NAME}:latest"
+                            containerDef.image = "${ECR_REPO_URI}:latest"
                         }
                     }
                     
@@ -102,4 +115,13 @@ pipeline {
             }
         }
     }
+    
+    post {
+        always {
+            // Clean up Docker images after the pipeline completes
+            sh "docker rmi ${ECR_REPO_NAME}:latest"
+            sh "docker rmi ${ECR_REPO_URI}:latest"
+        }
+    }
 }
+
